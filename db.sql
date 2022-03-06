@@ -1,9 +1,5 @@
 \set ON_ERROR_STOP on
 
-----------------------------------------
--- Hypertable to transactions data
-----------------------------------------
-
 DROP database IF EXISTS hackernews WITH (FORCE);
 CREATE database hackernews;
 \c hackernews
@@ -19,6 +15,7 @@ CREATE TABLE IF NOT EXISTS stories (
     title text,
     "url" text,
     "text" text,
+    "type" text,
     descendants int,
     score int,
     deleted bool,
@@ -35,6 +32,8 @@ CREATE TABLE IF NOT EXISTS comments (
     "by" text,
     "time" timestamp,
     "text" text,
+    "type" text,
+    score int,
     deleted bool,
     dead bool,
 
@@ -43,6 +42,21 @@ CREATE TABLE IF NOT EXISTS comments (
 CREATE INDEX ON comments (id);
 CREATE INDEX ON comments (parent);
 CREATE INDEX ON comments ("by");
+
+
+CREATE TABLE IF NOT EXISTS pollopts (
+    id int,
+    "by" text,
+    "time" timestamp,
+    "text" text,
+    "type" text,
+    score int,
+    poll int,
+
+    PRIMARY KEY ("time", id)
+);
+CREATE INDEX ON pollopts (id);
+CREATE INDEX ON pollopts (poll);
 
 -- Step 2: Turn into hypertable
 -- SELECT create_hypertable('story', 'time', chunk_time_interval => INTERVAL '7 day');

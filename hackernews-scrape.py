@@ -1,4 +1,5 @@
 import asyncio
+import json
 import threading
 import requests
 from configparser import ConfigParser
@@ -20,7 +21,7 @@ class Item(object):
         self.kids = kids
 
 class Comment(Item):
-  def __init__(self, id: int, type: str, time: int, parent: str, kids: list[int]=[], text: str="", deleted: bool=False, by: str="", dead: bool=False):
+  def __init__(self, id: int, type: str, parent: str, time: int=0, kids: list[int]=[], text: str="", deleted: bool=False, by: str="", dead: bool=False):
     super().__init__(id, type, by, time, kids)
     self.text = text
     self.deleted = deleted
@@ -29,13 +30,11 @@ class Comment(Item):
     self.by = by
     self.kids = kids
 
-  def to_text(self):
-      return self.text
-
 class Story(Item):
-  def __init__(self, id: int, type: str, time: int, by: str="", title: str="", descendants: int=0, score: int=0, url: str="", kids: list[int]=[], dead: bool=False, text: str="", deleted: bool=False, parts: list[int]=[]):
+  def __init__(self, id: int, type: str, time: int=0, by: str="", title: str="", descendants: int=0, score: int=0, url: str="", kids: list[int]=[], dead: bool=False, text: str="", deleted: bool=False, parts: list[int]=[]):
     super().__init__(id, type, by, time, kids)
     self.title = title
+    self.type = type
     self.descendants = descendants
     self.score = score
     self.url = url
@@ -44,8 +43,13 @@ class Story(Item):
     self.text = text
     self.by = by
 
-  def to_text(self):
-      return self.title
+class PollOption(Item):
+  def __init__(self, id: int, type: str, time: int=0, text: str="", by: str="", poll: int=0, score: int=0):
+    super().__init__(id, type, by, time, [])
+    self.text = text
+    self.poll = poll
+    self.by = by
+    self.score = score
 
 DatabaseConfig = namedtuple('DatabaseConfig', 'host port database user password')
 def config(filename='database.ini') -> DatabaseConfig:
@@ -61,10 +65,10 @@ def insert_story_to_db(story: Story):
     conn = db_pool.getconn()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO stories (id, "by", "time", title, score, url, text, descendants, dead, deleted)
-        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING;
+        INSERT INTO stories (id, "by", "time", title, score, url, text, descendants, dead, deleted, type)
+        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s, %s, %s, %s, %s);
         """,
-        (story.id, story.by, story.time, story.title, story.score, story.url, story.text, story.descendants, story.dead, story.deleted))
+        (story.id, story.by, story.time, story.title, story.score, story.url, story.text, story.descendants, story.dead, story.deleted, story.type))
     conn.commit()
     cur.close()
     db_pool.putconn(conn)
@@ -74,9 +78,21 @@ def insert_comment_to_db(comment: Comment):
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO comments (id, "by", "time", text, deleted, parent, dead)
-        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s) ON CONFLICT DO NOTHING;
+        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s);
         """,
         (comment.id, comment.by, comment.time, comment.text, comment.deleted, comment.parent, comment.dead))
+    conn.commit()
+    cur.close()
+    db_pool.putconn(conn)
+
+def insert_pollopts_to_db(poll_option: PollOption):
+    conn = db_pool.getconn()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO pollopts (id, "by", "time", text, poll, score)
+        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s);
+        """,
+        (poll_option.id, poll_option.by, poll_option.time, poll_option.text, poll_option.poll, poll_option.score))
     conn.commit()
     cur.close()
     db_pool.putconn(conn)
@@ -90,6 +106,8 @@ def db_writer_worker(input_queue: queue.Queue):
             insert_comment_to_db(data)
         elif isinstance(data, Story):
             insert_story_to_db(data)
+        elif isinstance(data, PollOption):
+            insert_pollopts_to_db(data)
 
 def get_last_id() -> int:
     conn = db_pool.getconn()
@@ -107,12 +125,17 @@ async def get_items(session: aiohttp.ClientSession, id: int, db_queue: queue.Que
     try:
         async with session.get(url) as raw_response:
             response = await raw_response.json()
-            if response['type'] == 'story' or response['type'] == 'poll':
+            if response['type'] == 'story' or response['type'] == 'poll' or response['type'] == 'job':
                 o = Story(**response)
                 db_queue.put(o)
             elif response['type'] == 'comment':
                 o = Comment(**response)
                 db_queue.put(o)
+            elif response['type'] == 'pollopt':
+                o = PollOption(**response)
+                db_queue.put(o)
+            else:
+                print(f"Unknown type {response['type']} for id {id}")
     except Exception as e:
         print(f"Error: {e}, response: {response}")
     finally:
@@ -129,7 +152,7 @@ def get_id() -> int:
         n += 1
 
 async def main(db_queue: queue.Queue):
-    pbar = tqdm.tqdm(range(1, get_max_id() + 1), initial=get_last_id() + 1)
+    pbar = tqdm.tqdm(range(get_last_id() + 1, get_max_id() + 1), initial=(get_last_id() + 1), total=(get_max_id() + 1))
     N = 100
     sem = asyncio.Semaphore(N)
     async with aiohttp.ClientSession() as session:
