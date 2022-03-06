@@ -44,12 +44,13 @@ class Story(Item):
     self.by = by
 
 class PollOption(Item):
-  def __init__(self, id: int, type: str, time: int=0, text: str="", by: str="", poll: int=0, score: int=0):
+  def __init__(self, id: int, type: str, time: int=0, text: str="", by: str="", poll: int=0, score: int=0, deleted: bool=False):
     super().__init__(id, type, by, time, [])
     self.text = text
     self.poll = poll
     self.by = by
     self.score = score
+    self.deleted = deleted
 
 DatabaseConfig = namedtuple('DatabaseConfig', 'host port database user password')
 def config(filename='database.ini') -> DatabaseConfig:
@@ -65,7 +66,7 @@ def insert_story_to_db(story: Story):
     conn = db_pool.getconn()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO stories (id, "by", "time", title, score, url, text, descendants, dead, deleted, type)
+        INSERT INTO items (id, "by", "time", title, score, url, text, descendants, dead, deleted, type)
         VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s, %s, %s, %s, %s);
         """,
         (story.id, story.by, story.time, story.title, story.score, story.url, story.text, story.descendants, story.dead, story.deleted, story.type))
@@ -77,10 +78,10 @@ def insert_comment_to_db(comment: Comment):
     conn = db_pool.getconn()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO comments (id, "by", "time", text, deleted, parent, dead)
-        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s);
+        INSERT INTO items (id, "by", "time", text, deleted, parent, dead, type)
+        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s, %s);
         """,
-        (comment.id, comment.by, comment.time, comment.text, comment.deleted, comment.parent, comment.dead))
+        (comment.id, comment.by, comment.time, comment.text, comment.deleted, comment.parent, comment.dead, comment.type))
     conn.commit()
     cur.close()
     db_pool.putconn(conn)
@@ -89,10 +90,10 @@ def insert_pollopts_to_db(poll_option: PollOption):
     conn = db_pool.getconn()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO pollopts (id, "by", "time", text, poll, score)
+        INSERT INTO items (id, "by", "time", text, poll, score, type)
         VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s);
         """,
-        (poll_option.id, poll_option.by, poll_option.time, poll_option.text, poll_option.poll, poll_option.score))
+        (poll_option.id, poll_option.by, poll_option.time, poll_option.text, poll_option.poll, poll_option.score, poll_option.type))
     conn.commit()
     cur.close()
     db_pool.putconn(conn)
@@ -112,7 +113,7 @@ def db_writer_worker(input_queue: queue.Queue):
 def get_last_id() -> int:
     conn = db_pool.getconn()
     cur = conn.cursor()
-    cur.execute("SELECT max(max) FROM (SELECT max(stories.id) from stories UNION SELECT max(comments.id) FROM comments) as subquery;", ())
+    cur.execute("SELECT max(id) FROM items;", ())
     
     rows = cur.fetchall()
     conn.commit()
