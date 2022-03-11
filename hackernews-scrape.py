@@ -46,13 +46,14 @@ class Story(Item):
     self.by = by
 
 class PollOption(Item):
-  def __init__(self, id: int, type: str, time: int=0, text: str="", by: str="", poll: int=0, score: int=0, deleted: bool=False):
+  def __init__(self, id: int, type: str, time: int=0, text: str="", by: str="", poll: int=0, score: int=0, deleted: bool=False, title: str=""):
     super().__init__(id, type, by, time, [])
     self.text = text
     self.poll = poll
     self.by = by
     self.score = score
     self.deleted = deleted
+    self.title = title
 
 DatabaseConfig = namedtuple('DatabaseConfig', 'host port database user password')
 def config(filename='database.ini') -> DatabaseConfig:
@@ -92,10 +93,10 @@ def insert_pollopts_to_db(poll_option: PollOption):
     conn = db_pool.getconn()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO items (id, "by", "time", text, poll, score, type)
-        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s) ON CONFLICT DO NOTHING;
+        INSERT INTO items (id, "by", "time", text, poll, score, type, title)
+        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING;
         """,
-        (poll_option.id, poll_option.by, poll_option.time, poll_option.text, poll_option.poll, poll_option.score, poll_option.type))
+        (poll_option.id, poll_option.by, poll_option.time, poll_option.text, poll_option.poll, poll_option.score, poll_option.type, poll_option.title))
     conn.commit()
     cur.close()
     db_pool.putconn(conn)
