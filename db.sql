@@ -6,7 +6,7 @@ CREATE database hackernews;
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 -- Step 1: Define regular table
-CREATE TYPE item_type AS ENUM ('comment', 'story', 'pollopts', 'job');
+CREATE TYPE item_type AS ENUM ('comment', 'story', 'poll', 'pollopt', 'job');
 
 CREATE TABLE IF NOT EXISTS items (
     id int,
