@@ -46,7 +46,7 @@ class Story(Item):
     self.by = by
 
 class PollOption(Item):
-  def __init__(self, id: int, type: str, time: int=0, text: str="", by: str="", poll: int=0, score: int=0, deleted: bool=False, title: str=""):
+  def __init__(self, id: int, type: str, time: int=0, text: str="", by: str="", poll: int=0, score: int=0, deleted: bool=False, title: str="", url: str=""):
     super().__init__(id, type, by, time, [])
     self.text = text
     self.poll = poll
@@ -54,6 +54,7 @@ class PollOption(Item):
     self.score = score
     self.deleted = deleted
     self.title = title
+    self.url = url
 
 DatabaseConfig = namedtuple('DatabaseConfig', 'host port database user password')
 def config(filename='database.ini') -> DatabaseConfig:
@@ -93,10 +94,10 @@ def insert_pollopts_to_db(poll_option: PollOption):
     conn = db_pool.getconn()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO items (id, "by", "time", text, poll, score, type, title)
-        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING;
+        INSERT INTO items (id, "by", "time", text, poll, score, type, title, url)
+        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING;
         """,
-        (poll_option.id, poll_option.by, poll_option.time, poll_option.text, poll_option.poll, poll_option.score, poll_option.type, poll_option.title))
+        (poll_option.id, poll_option.by, poll_option.time, poll_option.text, poll_option.poll, poll_option.score, poll_option.type, poll_option.title, poll_option.url))
     conn.commit()
     cur.close()
     db_pool.putconn(conn)
@@ -162,7 +163,8 @@ async def main():
     id_queue = asyncio.Queue(maxsize=NUM_OF_HTTP_QUEUE)
 
     pbar = tqdm.tqdm(range(get_last_id() + 1, get_max_id() + 1), initial=(get_last_id() + 1), total=(get_max_id() + 1))
-    async with aiohttp.ClientSession() as session:
+    aiohttp_connector = aiohttp.TCPConnector(limit=NUM_OF_HTTP_WORKER, ttl_dns_cache=3600)
+    async with aiohttp.ClientSession(connector=aiohttp_connector) as session:
 
         for _ in range(NUM_OF_DB_WORKER):
             asyncio.create_task(db_writer_worker(db_queue))

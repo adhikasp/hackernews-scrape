@@ -25,8 +25,40 @@ CREATE TABLE IF NOT EXISTS items (
 
     PRIMARY KEY ("time", id)
 );
-CREATE INDEX ON items (id);
-CREATE INDEX ON items ("by");
+CREATE INDEX ON items (id) WITH (timescaledb.transaction_per_chunk);
+CREATE INDEX ON items ("by") WITH (timescaledb.transaction_per_chunk);
+CREATE INDEX ON items ("type", "by", "time") WITH (timescaledb.transaction_per_chunk);
+CREATE INDEX items_score_idx ON items (score) 
+    WITH (timescaledb.transaction_per_chunk)
+    WHERE "type" = 'story' AND "by" IS NOT NULL AND "by" <> '';
+
+ALTER TABLE items ADD COLUMN ts_title tsvector 
+    GENERATED ALWAYS AS (to_tsvector('english', title)) STORED;
+CREATE INDEX ts_title_idx ON items USING GIN (ts_title) WITH (timescaledb.transaction_per_chunk);
 
 -- Step 2: Turn into hypertable
 SELECT create_hypertable('items', 'time', chunk_time_interval => INTERVAL '7 day');
+
+-- Step 3: Continuous aggregate
+
+-- SELECT "by" AS username, COUNT(*) AS post_count 
+-- FROM items
+-- WHERE "by" IS NOT NULL AND "by" <> ''
+-- GROUP BY "by"
+
+CREATE MATERIALIZED VIEW daily_activity
+WITH (timescaledb.continuous) AS
+SELECT "by",
+   time_bucket(INTERVAL '1 day', time) AS bucket,
+   COUNT(*) as post_count,
+   SUM(score) as score_sum
+FROM items
+WHERE "by" IS NOT NULL AND "by" <> ''
+GROUP BY "by", bucket
+WITH NO DATA;
+
+CALL refresh_continuous_aggregate('daily_activity', NULL, NULL);
+
+SELECT add_continuous_aggregate_policy('daily_activity',
+     end_offset => INTERVAL '1 month',
+     schedule_interval => INTERVAL '1 day');
