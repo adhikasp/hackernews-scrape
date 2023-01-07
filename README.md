@@ -1,8 +1,6 @@
 # hackernews-scrape
 
-Scrape [Hacker News](https://news.ycombinator.com/) data into postgresql database.
-
-Asyncio mostly taken from [https://github.com/ashish01/hn-data-dumps]
+Scrape [Hacker News](https://news.ycombinator.com/) data into postgresql database. Python script idea derived from [ashish01/hn-data-dumps](https://github.com/ashish01/hn-data-dumps).
 
 ## Setup
 
@@ -12,14 +10,9 @@ docker-compose up -d
 pip3 install -r requirements.txt
 python3 hackernews-scrape.py
 ```
+## Postgres/TimescaleDB features exploration
 
-## "Online" Index Alter
-
-```sql
-CREATE INDEX ON items ("type");
-```
-
-## Full text search
+### Full text search
 
 [https://blog.crunchydata.com/blog/postgres-full-text-search-a-search-engine-in-a-database]
 
@@ -93,7 +86,7 @@ After score index
                ->  Index Scan Backward using _hyper_1_6_chunk_items_score_idx on _hyper_1_6_chunk  (cost=0.15..311.46 rows=374 width=62)
 ```
 
-## Sometime CAGG is not as fast as direct index
+### Sometime CAGG is not as fast as direct index
 
 The CAGG doesn't reduce enough cardinality from the base table.
 

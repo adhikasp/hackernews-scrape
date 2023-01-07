@@ -41,11 +41,6 @@ SELECT create_hypertable('items', 'time', chunk_time_interval => INTERVAL '7 day
 
 -- Step 3: Continuous aggregate
 
--- SELECT "by" AS username, COUNT(*) AS post_count 
--- FROM items
--- WHERE "by" IS NOT NULL AND "by" <> ''
--- GROUP BY "by"
-
 CREATE MATERIALIZED VIEW daily_activity
 WITH (timescaledb.continuous) AS
 SELECT "by",
