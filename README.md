@@ -4,6 +4,15 @@ Scrape [Hacker News](https://news.ycombinator.com/) data into postgresql databas
 
 Asyncio mostly taken from [https://github.com/ashish01/hn-data-dumps]
 
+## Setup
+
+```bash
+cp database.ini.example database.ini # change db config if necessary
+docker-compose up -d
+pip3 install -r requirements.txt
+python3 hackernews-scrape.py
+```
+
 ## "Online" Index Alter
 
 ```sql

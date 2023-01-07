@@ -1,0 +1,19 @@
+---
+version: "3.3"
+services:
+  postgres-hn:
+    container_name: postgres-hn
+    image: timescale/timescaledb-ha:pg14-latest
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./postgres/script:/docker-entrypoint-initdb.d
+      - ./postgres/data:/var/lib/postgresql/data
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+    environment:
+      POSTGRES_MULTIPLE_DATABASES: hackernews
+      POSTGRES_PASSWORD: password
+      POSTGRES_UID: 1000
+      POSTGRES_GID: 1000
