@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import asyncio
 import requests
 from configparser import ConfigParser
@@ -7,6 +8,11 @@ from multiprocessing import Pool
 from psycopg2 import pool
 import tqdm
 import aiohttp
+from datetime import timedelta
+
+# How many days back we will check for update
+# This is necessary to fetch latest story score, comment update, and other change
+LOOKBACK_UPDATE = timedelta(hours=2)
 
 NUM_OF_DB_WORKER = 100
 NUM_OF_DB_QUEUE = 300
@@ -14,7 +20,7 @@ NUM_OF_DB_CONNECTION_POOL = 100
 NUM_OF_HTTP_WORKER = 100
 NUM_OF_HTTP_QUEUE = 2
 
-class Item(object):
+class Item(dict):
     def __init__(self, id: int, type: str, by: str, time: int, kids: list[int]):
         self.id = id
         self.type = type
@@ -72,9 +78,10 @@ def insert_story_to_db(story: Story):
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO items (id, "by", "time", title, score, url, text, descendants, dead, deleted, type)
-        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING;
-        """,
-        (story.id, story.by, story.time, story.title, story.score, story.url, story.text, story.descendants, story.dead, story.deleted, story.type))
+        VALUES (%(id)s, %(by)s, to_timestamp(%(time)s), %(title)s, %(score)s, %(url)s, %(text)s, %(descendants)s, %(dead)s, %(deleted)s, %(type)s) 
+        ON CONFLICT (time, id) DO UPDATE SET 
+        title = %(title)s, score = %(score)s, text = %(text)s, descendants = %(descendants)s;
+        """, vars(story))
     conn.commit()
     cur.close()
     db_pool.putconn(conn)
@@ -84,9 +91,10 @@ def insert_comment_to_db(comment: Comment):
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO items (id, "by", "time", text, deleted, parent, dead, type)
-        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING;
-        """,
-        (comment.id, comment.by, comment.time, comment.text, comment.deleted, comment.parent, comment.dead, comment.type))
+        VALUES (%(id)s, %(by)s, to_timestamp(%(time)s), %(text)s, %(deleted)s, %(parent)s, %(dead)s, %(type)s) 
+        ON CONFLICT (time, id) DO UPDATE SET
+        text = %(text)s, deleted = %(deleted)s, parent = %(parent)s, dead = %(dead)s;
+        """, vars(comment))
     conn.commit()
     cur.close()
     db_pool.putconn(conn)
@@ -96,9 +104,10 @@ def insert_pollopts_to_db(poll_option: PollOption):
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO items (id, "by", "time", text, poll, score, type, title, url)
-        VALUES (%s, %s, to_timestamp(%s), %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING;
-        """,
-        (poll_option.id, poll_option.by, poll_option.time, poll_option.text, poll_option.poll, poll_option.score, poll_option.type, poll_option.title, poll_option.url))
+        VALUES (%(id)s, %(by)s, to_timestamp(%(time)s), %(text)s, %(poll)s, %(score)s, %(type)s, %(title)s, %(url)s)
+        ON CONFLICT (time, id) DO UPDATE SET
+        text = %(text)s, poll = %(poll)s, score = %(score)s, title = %(title)s, url = %(url)s;
+        """, vars(poll_option))
     conn.commit()
     cur.close()
     db_pool.putconn(conn)
@@ -118,6 +127,16 @@ def get_last_id() -> int:
     conn = db_pool.getconn()
     cur = conn.cursor()
     cur.execute("SELECT max(id) FROM items;", ())
+    
+    rows = cur.fetchall()
+    conn.commit()
+    cur.close()
+    return int(rows[0][0]) if rows[0][0] else 0
+
+def get_last_id_for_update() -> int:
+    conn = db_pool.getconn()
+    cur = conn.cursor()
+    cur.execute(f"SELECT min(id) FROM items WHERE time > NOW() - interval '{LOOKBACK_UPDATE.total_seconds()}' second;", ())
     
     rows = cur.fetchall()
     conn.commit()
@@ -157,7 +176,10 @@ async def main():
     db_queue = asyncio.Queue(maxsize=NUM_OF_DB_QUEUE)
     id_queue = asyncio.Queue(maxsize=NUM_OF_HTTP_QUEUE)
 
-    pbar = tqdm.tqdm(range(get_last_id() + 1, get_max_id() + 1), initial=(get_last_id() + 1), total=(get_max_id() + 1))
+    print(f"Getting last items + {LOOKBACK_UPDATE} back")
+    last_id_from_db = get_last_id_for_update()
+    last_id_from_hn = get_max_id()
+    pbar = tqdm.tqdm(range(last_id_from_db + 1, last_id_from_hn + 1), initial=(last_id_from_db + 1), total=(last_id_from_hn + 1))
     aiohttp_connector = aiohttp.TCPConnector(limit=NUM_OF_HTTP_WORKER, ttl_dns_cache=3600)
     async with aiohttp.ClientSession(connector=aiohttp_connector) as session:
 

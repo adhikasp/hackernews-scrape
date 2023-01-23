@@ -31,7 +31,7 @@ SELECT create_hypertable('items', 'time', chunk_time_interval => INTERVAL '7 day
 -- Step 3: Indexes
 CREATE INDEX ON items (id) WITH (timescaledb.transaction_per_chunk);
 CREATE INDEX ON items ("by") WITH (timescaledb.transaction_per_chunk);
-CREATE INDEX ON items ("type", "by", "time") WITH (timescaledb.transaction_per_chunk);
+CREATE INDEX ON items ("parent") WITH (timescaledb.transaction_per_chunk);
 CREATE INDEX items_score_idx ON items (score) 
     WITH (timescaledb.transaction_per_chunk)
     WHERE "by" IS NOT NULL AND "by" <> '';
