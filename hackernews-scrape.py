@@ -9,10 +9,14 @@ from psycopg2 import pool
 import tqdm
 import aiohttp
 from datetime import timedelta
+import sys
 
 # How many days back we will check for update
 # This is necessary to fetch latest story score, comment update, and other change
-LOOKBACK_UPDATE = timedelta(hours=2)
+if len(sys.argv) == 2:
+    LOOKBACK_UPDATE = timedelta(hours=int(sys.argv[1]))
+else:
+    LOOKBACK_UPDATE = timedelta(hours=2)
 
 NUM_OF_DB_WORKER = 100
 NUM_OF_DB_QUEUE = 300
