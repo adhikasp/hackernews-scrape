@@ -11,8 +11,8 @@ import aiohttp
 NUM_OF_DB_WORKER = 100
 NUM_OF_DB_QUEUE = 300
 NUM_OF_DB_CONNECTION_POOL = 100
-NUM_OF_HTTP_WORKER = 300
-NUM_OF_HTTP_QUEUE = 1
+NUM_OF_HTTP_WORKER = 100
+NUM_OF_HTTP_QUEUE = 2
 
 class Item(object):
     def __init__(self, id: int, type: str, by: str, time: int, kids: list[int]):
@@ -46,13 +46,14 @@ class Story(Item):
     self.by = by
 
 class PollOption(Item):
-  def __init__(self, id: int, type: str, time: int=0, text: str="", by: str="", poll: int=0, score: int=0, deleted: bool=False, title: str="", url: str=""):
+  def __init__(self, id: int, type: str, time: int=0, text: str="", by: str="", poll: int=0, score: int=0, deleted: bool=False, title: str="", url: str="", dead: bool=False):
     super().__init__(id, type, by, time, [])
     self.text = text
     self.poll = poll
     self.by = by
     self.score = score
     self.deleted = deleted
+    self.dead = dead
     self.title = title
     self.url = url
 
@@ -146,17 +147,11 @@ async def get_items(session: aiohttp.ClientSession, id_queue: asyncio.Queue, db_
         except Exception as e:
             id_queue.task_done()
             await id_queue.put(id)
-            print(f"Error: {e}, response: {response}")
+            print(f"Error: {e}, will retry, response: {response}")
 
 def get_max_id() -> int:
     r = requests.get("https://hacker-news.firebaseio.com/v0/maxitem.json")
     return int(r.text)
-
-def get_id() -> int:
-    n = get_last_id()
-    while n < get_max_id():
-        yield n
-        n += 1
 
 async def main():
     db_queue = asyncio.Queue(maxsize=NUM_OF_DB_QUEUE)

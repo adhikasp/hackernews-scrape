@@ -248,3 +248,11 @@ GroupAggregate  (cost=1313978.47..1314287.40 rows=200 width=40)
                                        ->  Seq Scan on _hyper_4_951_chunk  (cost=0.00..371.30 rows=13215 width=25)
                                              Filter: ((bucket > '2000-01-01 00:00:00'::timestamp without time zone) AND (bucket < COALESCE(_timescaledb_internal.to_timestamp_without_timezone(_timescaledb_internal.cagg_watermark(4)), '-infinity'::timestamp without time zone)))
 ```
+
+## Misc command
+
+Backup DB 
+
+```bash
+pg_dump -h localhost -p 5433 -U postgres -Fc -f hn.db.bak hackernews
+```

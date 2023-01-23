@@ -11,7 +11,7 @@ CREATE TYPE item_type AS ENUM ('comment', 'story', 'poll', 'pollopt', 'job');
 CREATE TABLE IF NOT EXISTS items (
     id int,
     "by" text,
-    "time" timestamp,
+    "time" timestamptz,
     title text,
     "url" text,
     "text" text,
@@ -25,21 +25,23 @@ CREATE TABLE IF NOT EXISTS items (
 
     PRIMARY KEY ("time", id)
 );
+-- Step 2: Turn into hypertable
+SELECT create_hypertable('items', 'time', chunk_time_interval => INTERVAL '7 day');
+
+-- Step 3: Indexes
 CREATE INDEX ON items (id) WITH (timescaledb.transaction_per_chunk);
 CREATE INDEX ON items ("by") WITH (timescaledb.transaction_per_chunk);
 CREATE INDEX ON items ("type", "by", "time") WITH (timescaledb.transaction_per_chunk);
 CREATE INDEX items_score_idx ON items (score) 
     WITH (timescaledb.transaction_per_chunk)
-    WHERE "type" = 'story' AND "by" IS NOT NULL AND "by" <> '';
+    WHERE "by" IS NOT NULL AND "by" <> '';
 
 ALTER TABLE items ADD COLUMN ts_title tsvector 
     GENERATED ALWAYS AS (to_tsvector('english', title)) STORED;
 CREATE INDEX ts_title_idx ON items USING GIN (ts_title) WITH (timescaledb.transaction_per_chunk);
 
--- Step 2: Turn into hypertable
-SELECT create_hypertable('items', 'time', chunk_time_interval => INTERVAL '7 day');
 
--- Step 3: Continuous aggregate
+-- Step 4: Continuous aggregate
 
 CREATE MATERIALIZED VIEW daily_activity
 WITH (timescaledb.continuous) AS
